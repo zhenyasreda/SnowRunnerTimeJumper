@@ -14,10 +14,13 @@ LDFLAGS  ?= -mwindows
 LDLIBS   ?= -lgdi32 -lgdiplus -luser32 -lshell32
 
 ifeq ($(OS),Windows_NT)
-# В Windows make выполняет команды через cmd.exe, поэтому пути с обратными
-# косыми чертами и без Unix-опций у mkdir.
-MKDIR = mkdir $(BUILD) 2>nul & mkdir $(BUILD)\obj 2>nul & exit 0
-CLEAN = if exist $(BUILD) rmdir /s /q $(BUILD) & exit 0
+# Рецепты рассчитаны на cmd.exe. Если в PATH есть sh.exe (например, из
+# Git for Windows или на CI-раннере GitHub), GNU make выбрал бы его — и
+# команды вроде «mkdir build\obj» отработали бы неверно. Поэтому оболочку
+# задаём явно.
+SHELL   = cmd.exe
+MKDIR   = mkdir $(BUILD) 2>nul & mkdir $(BUILD)\obj 2>nul & exit 0
+CLEAN   = if exist $(BUILD) rmdir /s /q $(BUILD) & exit 0
 else
 MKDIR = mkdir -p $(BUILD) $(OBJ)
 CLEAN = rm -rf $(BUILD)

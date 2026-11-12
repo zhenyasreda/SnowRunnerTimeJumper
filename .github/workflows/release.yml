@@ -15,12 +15,16 @@ jobs:
     permissions:
       contents: write
 
+    defaults:
+      run:
+        shell: cmd
+
     steps:
       - name: Получить исходники
         uses: actions/checkout@v4
 
-      - name: Установить MinGW-w64
-        run: choco install mingw -y --no-progress
+      - name: Проверить компилятор
+        run: gcc --version
 
       - name: Собрать
         run: mingw32-make
