@@ -293,20 +293,22 @@ void ui_paint(UiState *st, HDC hdc, int width, int height)
     WCHAR sub[160];
     if (st->session) {
         const SrtInfo *info = srt_info(st->session);
-        WCHAR proc[64], pid[32];
+        WCHAR proc[64];
         gfx_widen(info ? info->process : SRT_GAME_PROCESS, proc, 64);
-        /* PID в строку — вручную, чтобы не зависеть от swprintf. */
+
+        /* PID без ведущих нулей. */
+        char digits[16];
         unsigned long v = info ? (unsigned long)info->pid : 0UL;
-        pid[0] = (WCHAR)('0' + (int)((v / 100000000UL) % 10));
-        pid[1] = (WCHAR)('0' + (int)((v / 10000000UL) % 10));
-        pid[2] = (WCHAR)('0' + (int)((v / 1000000UL) % 10));
-        pid[3] = (WCHAR)('0' + (int)((v / 100000UL) % 10));
-        pid[4] = (WCHAR)('0' + (int)((v / 10000UL) % 10));
-        pid[5] = (WCHAR)('0' + (int)((v / 1000UL) % 10));
-        pid[6] = (WCHAR)('0' + (int)((v / 100UL) % 10));
-        pid[7] = (WCHAR)('0' + (int)((v / 10UL) % 10));
-        pid[8] = (WCHAR)('0' + (int)(v % 10));
-        pid[9] = 0;
+        int n = 0;
+        do { digits[n++] = (char)('0' + (int)(v % 10UL)); v /= 10UL; } while (v && n < 15);
+        digits[n] = 0;
+        for (int i = 0; i < n / 2; i++) {
+            char t = digits[i];
+            digits[i] = digits[n - 1 - i];
+            digits[n - 1 - i] = t;
+        }
+        WCHAR pid[24];
+        gfx_widen(digits, pid, 24);
 
         wcscpy(sub, proc);
         wcscat(sub, L" · PID ");

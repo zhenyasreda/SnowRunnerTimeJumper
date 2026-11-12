@@ -1,0 +1,46 @@
+name: Релиз
+
+# При публикации тега вида v1.0.0 собирает программу и прикрепляет
+# готовый .exe к релизу GitHub.
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Сборка релиза (Windows)
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+
+      - name: Установить MinGW-w64
+        run: choco install mingw -y --no-progress
+
+      - name: Собрать
+        run: mingw32-make
+
+      - name: Прогнать тесты
+        run: mingw32-make test
+
+      - name: Опубликовать релиз
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/SnowRunnerTimeJumper.exe
+          generate_release_notes: true
+          body: |
+            Готовая программа для управления временем в SnowRunner.
+
+            Файл `SnowRunnerTimeJumper.exe` — обычное 64-разрядное приложение
+            Windows, ничего доустанавливать не нужно. Запускать после игры.
+
+            > **Антивирус может ругаться.** Программа изменяет память процесса
+            > игры — это и есть её назначение. Срабатывание ложное; при
+            > необходимости добавьте файл в исключения.
+
+            Исходники и инструкция по сборке — в этом же репозитории.
