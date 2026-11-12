@@ -1,0 +1,7 @@
+build/
+build-cmake/
+obj/
+*.o
+*.exe
+*.bmp
+srtc.log
