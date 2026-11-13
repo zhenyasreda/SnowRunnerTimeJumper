@@ -30,6 +30,7 @@
 #include <windows.h>
 #include <tlhelp32.h>
 #include "srt_priv.h"
+#include "i18n.h"
 
 #define MAX_CANDIDATES 16
 #define CHUNK_SIZE      (1024u * 1024u)
@@ -266,7 +267,7 @@ static int scan_loose(HANDLE proc, uintptr_t start, uint32_t size,
 
 SrtStatus srt_find_hook(HANDLE proc, uintptr_t base,
                          SrtHookCandidate *out_list, int *out_count,
-                         char *err, size_t errsz)
+                         WCHAR *err, int err_chars)
 {
     ModuleInfo info;
     SrtHookCandidate tmp[MAX_CANDIDATES];
@@ -297,9 +298,9 @@ SrtStatus srt_find_hook(HANDLE proc, uintptr_t base,
     if (total > 0) {
         memcpy(out_list, tmp, sizeof(SrtHookCandidate) * (size_t)total);
         if (out_count) *out_count = total;
-        srt_log("scan: точных совпадений %d", total);
+        log_msg(S_LOG_SCAN_EXACT, total);
         for (int i = 0; i < total; i++)
-            srt_log("scan:   адрес=%llX смещение=0x%X",
+            log_msg(S_LOG_SCAN_ADDR,
                     (unsigned long long)out_list[i].addr,
                     (unsigned)(unsigned int)out_list[i].disp);
         return SRT_OK;
@@ -311,24 +312,18 @@ SrtStatus srt_find_hook(HANDLE proc, uintptr_t base,
     total += n;
 
     if (total == 0) {
-        if (err) snprintf(err, errsz,
-            "В модуле игры не найдено инструкции обновления часов.\n"
-            "Похоже, игра обновилась: напишите разработчику программы.");
+        if (err) lang_format(err, err_chars, S_ERR_PATTERN);
         return SRT_E_PATTERN;
     }
 
     if (total > 1) {
-        if (err) snprintf(err, errsz,
-            "В коде игры найдено несколько похожих мест (%d), а известной "
-            "сигнатуры нет.\n\nПодключение не выполняется, чтобы не нарушить "
-            "работу игры. Похоже, игра обновилась: напишите разработчику.",
-            total);
+        if (err) lang_format(err, err_chars, S_ERR_AMBIGUOUS, total);
         return SRT_E_AMBIGUOUS;
     }
 
     memcpy(out_list, tmp, sizeof(SrtHookCandidate));
     if (out_count) *out_count = 1;
-    srt_log("scan: свободный поиск дал единственное совпадение адрес=%llX смещение=0x%X",
+    log_msg(S_LOG_SCAN_FREE,
             (unsigned long long)out_list[0].addr,
             (unsigned)(unsigned int)out_list[0].disp);
     return SRT_OK;

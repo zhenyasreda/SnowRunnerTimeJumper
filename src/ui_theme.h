@@ -5,6 +5,7 @@
 #define UI_THEME_H_INCLUDED
 
 #include <windows.h>
+#include "i18n.h"
 
 typedef enum {
     UI_THEME_SYSTEM = 0,   /* как в Windows */
@@ -39,8 +40,8 @@ const UiPalette *ui_theme_palette(void);
 /* Тёмная ли сейчас системная тема Windows? */
 BOOL ui_theme_system_is_dark(void);
 
-/* Название режима для интерфейса: «Системная», «Светлая», «Тёмная». */
-const WCHAR *ui_theme_name(void);
+/* Название режима оформления для интерфейса (переводится). */
+StrId ui_theme_label(void);
 
 /* Прочитать сохранённую настройку из файла. */
 void ui_theme_load(void);

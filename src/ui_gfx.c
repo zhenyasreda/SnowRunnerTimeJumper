@@ -5,6 +5,7 @@
 #include <string.h>
 #include "ui_gfx.h"
 #include "srt.h"
+#include "i18n.h"
 
 static ULONG_PTR g_token = 0;
 static BOOL       g_started = FALSE;
@@ -52,7 +53,7 @@ GfxFont *gfx_font_create(int pixel_size, int bold)
     if (!f) return NULL;
 
     if (GdipCreateFontFamilyFromName(L"Segoe UI", NULL, &f->family) != GFX_OK) {
-        srt_log("шрифт: GdipCreateFontFamilyFromName -> ошибка");
+        log_msg(S_LOG_GFX_FAMILY);
         free(f);
         return NULL;
     }
@@ -60,7 +61,7 @@ GfxFont *gfx_font_create(int pixel_size, int bold)
                                  bold ? GFX_FONT_BOLD : GFX_FONT_REGULAR,
                                  GFX_UNIT_PIXEL, &f->font);
     if (s2 != GFX_OK) {
-        srt_log("шрифт: GdipCreateFont(size=%d bold=%d) -> %d", pixel_size, bold, (int)s2);
+        log_msg(S_LOG_GFX_FONT, pixel_size, bold ? 1 : 0, (int)s2);
         GdipDeleteFontFamily(f->family);
         free(f);
         return NULL;

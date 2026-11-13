@@ -8,6 +8,7 @@
 #define HOTKEYS_H_INCLUDED
 
 #include <windows.h>
+#include "i18n.h"
 
 typedef enum {
     ACT_STOP = 0,     /* остановить время                      */
@@ -24,7 +25,7 @@ typedef struct {
     UINT         mods;        /* MOD_CONTROL | MOD_ALT            */
     UINT         vk;          /* виртуальная клавиша               */
     const char  *keys;        /* "Ctrl+Alt+S"                      */
-    const char  *desc;        /* "Остановить время"                */
+    StrId        desc;        /* описание действия (переводится)    */
     float        value;       /* параметр действия                 */
 } HotkeyDef;
 
@@ -36,8 +37,5 @@ const HotkeyDef *hotkey_by_id(int id);
 
 /* Подсказка в виде строки, например "Ctrl+Alt+S" -> "Ctrl+Alt+S". */
 const char *hotkey_label(const HotkeyDef *hk);
-
-/* Человекочитаемое описание действия. */
-const char *hotkey_action_text(const HotkeyDef *hk);
 
 #endif /* HOTKEYS_H_INCLUDED */

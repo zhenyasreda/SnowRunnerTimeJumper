@@ -3,11 +3,13 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <math.h>
 #include <windowsx.h>
 #include "ui.h"
 #include "ui_theme.h"
+#include "i18n.h"
 
 static UiState g_state;
 static int     g_demo = 0;
@@ -73,11 +75,40 @@ static BOOL apply_value(UiState *st, float hours)
 /*  Статус и вспомогательные функции                                    */
 /* ------------------------------------------------------------------ */
 
-static void set_status(UiState *st, const char *text, int kind)
+/* Переведённое сообщение в строке состояния. */
+static void set_status(UiState *st, StrId id, ...)
 {
-    gfx_widen(text, st->status, (int)(sizeof(st->status) / sizeof(st->status[0])));
-    st->status_kind = kind;
+    const WCHAR *fmt = L(id);
+    wchar_t buf[512];
+    va_list ap;
+
+    memset(buf, 0, sizeof(buf));
+    va_start(ap, id);
+    _vsnwprintf(buf, (int)(sizeof(buf) / sizeof(buf[0])) - 1, fmt, ap);
+    va_end(ap);
+    buf[(int)(sizeof(buf) / sizeof(buf[0])) - 1] = 0;
+
+    wcscpy(st->status, buf);
+    st->status_kind = 0;
     /* Перерисовываем только строку состояния — окно не мерцает. */
+    if (st->hwnd) InvalidateRect(st->hwnd, &st->rect_status, FALSE);
+}
+
+/* Сообщение об ошибке (выделяется цветом). */
+static void set_error(UiState *st, StrId id, ...)
+{
+    const WCHAR *fmt = L(id);
+    wchar_t buf[768];
+    va_list ap;
+
+    memset(buf, 0, sizeof(buf));
+    va_start(ap, id);
+    _vsnwprintf(buf, (int)(sizeof(buf) / sizeof(buf[0])) - 1, fmt, ap);
+    va_end(ap);
+    buf[(int)(sizeof(buf) / sizeof(buf[0])) - 1] = 0;
+
+    wcscpy(st->status, buf);
+    st->status_kind = 2;
     if (st->hwnd) InvalidateRect(st->hwnd, &st->rect_status, FALSE);
 }
 
@@ -121,105 +152,102 @@ static void layout_now(UiState *st)
 
 static void action_stop(UiState *st)
 {
-    if (!st->session) { set_status(st, "Сначала подключитесь к игре.", 1); return; }
+    if (!st->session) { set_status(st, S_ST_NEED_GAME); return; }
     if (srt_set_mode(st->session, SRT_MODE_FROZEN))
-        set_status(st, "Время остановлено.", 0);
+        set_status(st, S_ST_STOP_OK);
     else
-        set_status(st, "Не удалось остановить время.", 2);
+        set_error(st, S_ST_STOP_FAIL);
     refresh_state(st);
 }
 
 static void action_start(UiState *st)
 {
-    if (!st->session) { set_status(st, "Сначала подключитесь к игре.", 1); return; }
+    if (!st->session) { set_status(st, S_ST_NEED_GAME); return; }
     if (srt_set_mode(st->session, SRT_MODE_NATURAL))
-        set_status(st, "Время идёт в обычном режиме игры.", 0);
+        set_status(st, S_ST_START_OK);
     else
-        set_status(st, "Не удалось запустить время.", 2);
+        set_error(st, S_ST_START_FAIL);
     refresh_state(st);
 }
 
 static void action_sync(UiState *st)
 {
-    if (!st->session) { set_status(st, "Сначала подключитесь к игре.", 1); return; }
+    if (!st->session) { set_status(st, S_ST_NEED_GAME); return; }
     if (srt_rate_sync(st->session))
-        set_status(st, "Время синхронизировано с часами компьютера.", 0);
+        set_status(st, S_ST_SYNC_OK);
     else
-        set_status(st, "Не удалось включить синхронизацию.", 2);
+        set_error(st, S_ST_SYNC_FAIL);
     refresh_state(st);
 }
 
 static void action_speed(UiState *st, float factor)
 {
-    if (!st->session) { set_status(st, "Сначала подключитесь к игре.", 1); return; }
+    if (!st->session) { set_status(st, S_ST_NEED_GAME); return; }
     if (factor <= 0.0f) return;
     double ms = 2500.0 / (double)factor;
     if (srt_rate_start(st->session, ms)) {
-        char buf[128];
         if (factor > 1.01f)
-            snprintf(buf, sizeof(buf), "Скорость времени: x%g.", (double)factor);
+            set_status(st, S_ST_SPEED_X, (double)factor);
         else if (factor < 0.99f)
-            snprintf(buf, sizeof(buf), "Скорость времени: /%g.", 1.0 / (double)factor);
+            set_status(st, S_ST_SPEED_DIV, 1.0 / (double)factor);
         else
-            snprintf(buf, sizeof(buf), "Скорость времени: обычная.");
-        set_status(st, buf, 0);
+            set_status(st, S_ST_SPEED_NORMAL);
     } else {
-        set_status(st, "Не удалось изменить скорость.", 2);
+        set_error(st, S_ST_SPEED_FAIL);
     }
     refresh_state(st);
 }
 
 static void action_shift(UiState *st, float delta_hours)
 {
-    if (!st->session) { set_status(st, "Сначала подключитесь к игре.", 1); return; }
+    if (!st->session) { set_status(st, S_ST_NEED_GAME); return; }
 
     float cur = 0.0f;
     if (!srt_read_clock(st->session, &cur)) {
-        set_status(st, "Не удалось прочитать время в игре.", 2);
+        set_error(st, S_ST_READ_FAIL);
         return;
     }
     float next = srt_wrap_hours(cur + delta_hours);
     if (!apply_value(st, next)) {
-        set_status(st, "Не удалось изменить время.", 2);
+        set_error(st, S_ST_SET_FAIL);
         return;
     }
 
-    char buf[128];
     int hh = (int)floor(next);
     int mm = (int)floor((next - hh) * 60.0f + 0.0001f);
-    snprintf(buf, sizeof(buf), "Время в игре: %02d:%02d. Скорость обычная.", hh, mm);
-    set_status(st, buf, 0);
+    set_status(st, S_ST_SHIFTED, hh, mm);
     refresh_state(st);
 }
 
 static void action_set_time(UiState *st, float hours)
 {
-    if (!st->session) { set_status(st, "Сначала подключитесь к игре.", 1); return; }
+    if (!st->session) { set_status(st, S_ST_NEED_GAME); return; }
     if (!apply_value(st, hours)) {
-        set_status(st, "Не удалось установить время.", 2);
+        set_error(st, S_ST_SET_FAIL);
         return;
     }
-    char buf[128];
     int hh = (int)floor(hours);
     int mm = (int)floor((hours - hh) * 60.0f + 0.0001f);
-    snprintf(buf, sizeof(buf), "Время установлено на %02d:%02d. Скорость обычная.", hh, mm);
-    set_status(st, buf, 0);
+    set_status(st, S_ST_TIME_SET, hh, mm);
     refresh_state(st);
 }
 
 static void action_attach(UiState *st)
 {
     if (st->session) return;
-    char err[512];
+    WCHAR err[768];
     SrtSession *s = NULL;
-    SrtStatus rc = srt_attach(&s, err, sizeof(err));
+    SrtStatus rc = srt_attach(&s, err, (int)(sizeof(err) / sizeof(err[0])));
     if (rc != SRT_OK) {
-        set_status(st, err[0] ? err : "Не удалось подключиться к игре.", 2);
+        /* err уже содержит переведённое сообщение. */
+        wcscpy(st->status, err[0] ? err : L(S_ERR_GENERIC));
+        st->status_kind = 2;
+        if (st->hwnd) InvalidateRect(st->hwnd, &st->rect_status, FALSE);
         return;
     }
     st->session = s;
     refresh_state(st);
-    set_status(st, "Подключено. Управление временем доступно.", 0);
+    set_status(st, S_ST_CONNECTED);
 }
 
 static void action_detach(UiState *st)
@@ -228,7 +256,7 @@ static void action_detach(UiState *st)
     srt_detach(st->session);
     st->session = NULL;
     refresh_state(st);
-    set_status(st, "Отключено от игры, память игры восстановлена.", 0);
+    set_status(st, S_ST_DISCONNECTED);
     /* Набор кнопок изменился — нужна полная перерисовка. */
     layout_now(st);
     InvalidateRect(st->hwnd, NULL, FALSE);
@@ -243,7 +271,19 @@ static void action_theme(UiState *st)
     ui_theme_save();
     layout_now(st);
     InvalidateRect(st->hwnd, NULL, FALSE);
-    set_status(st, "Тема оформления изменена.", 0);
+    set_status(st, S_ST_THEME_CHANGED);
+}
+
+static void action_lang(UiState *st)
+{
+    LangMode m = lang_mode();
+    m = (m == LANG_SYSTEM) ? LANG_RU :
+        (m == LANG_RU)      ? LANG_EN : LANG_SYSTEM;
+    lang_set_mode(m);
+    lang_save();
+    layout_now(st);
+    InvalidateRect(st->hwnd, NULL, FALSE);
+    set_status(st, S_ST_LANG_CHANGED);
 }
 
 /* ------------------------------------------------------------------ */
@@ -261,6 +301,7 @@ static void perform(UiState *st, UiAction action, float value)
     case UI_ACT_ATTACH: action_attach(st); break;
     case UI_ACT_DETACH: action_detach(st); break;
     case UI_ACT_THEME:  action_theme(st); break;
+    case UI_ACT_LANG:   action_lang(st); break;
     case UI_ACT_PRESET_MENU: break;   /* обрабатывается отдельно */
     }
     layout_now(st);
@@ -428,10 +469,9 @@ static void register_hotkeys(HWND hwnd)
     for (int i = 0; i < g_hotkey_count; i++) {
         const HotkeyDef *hk = &g_hotkeys[i];
         if (!RegisterHotKey(hwnd, hk->id, hk->mods | MOD_NOREPEAT, hk->vk)) {
-            char buf[160];
-            snprintf(buf, sizeof(buf), "Не удалось зарегистрировать сочетание %s "
-                                      "(оно уже занято другой программой).", hk->keys);
-            set_status(&g_state, buf, 1);
+            WCHAR wkey[64];
+            gfx_widen(hk->keys, wkey, 64);
+            set_status(&g_state, S_ST_HOTKEY_TAKEN, wkey);
         }
     }
 }
@@ -476,7 +516,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
                     /* Игра закрылась или память стала недоступна. */
                     if (++st->read_fail > 10) {
                         action_detach(st);
-                        set_status(st, "Игра закрыта — память восстановлена.", 1);
+                        set_status(st, S_ST_GAME_CLOSED);
                         st->read_fail = 0;
                     }
                 } else {
@@ -580,9 +620,14 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     }
 
     case WM_SETTINGCHANGE: {
-        /* Системная тема могла измениться — обновляем оформление. */
+        /* Системная тема или язык системы могли измениться. */
         if (ui_theme_mode() == UI_THEME_SYSTEM) {
             ui_theme_set(UI_THEME_SYSTEM);
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        if (lang_mode() == LANG_SYSTEM) {
+            lang_set_mode(LANG_SYSTEM);
+            layout_now(st);
             InvalidateRect(hwnd, NULL, FALSE);
         }
         return 0;
@@ -699,14 +744,15 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hprev, LPSTR cmdline, int show)
     g_demo = (strstr(cmdline, "--demo") != NULL);
 
     if (!gfx_init()) {
-        MessageBoxW(NULL, L"Не удалось инициализировать графическую подсистему GDI+.",
-                    L"SnowRunner Time Jumper", MB_ICONERROR);
+        MessageBoxW(NULL, L(S_ERR_GFX), L(S_APP_TITLE), MB_ICONERROR);
         return 1;
     }
 
-    /* тема оформления: по умолчанию системная */
+    /* тема оформления и язык интерфейса: по умолчанию — как в системе */
     ui_theme_set(UI_THEME_SYSTEM);
     ui_theme_load();
+    lang_set_mode(LANG_SYSTEM);
+    lang_load();
 
     WNDCLASSEXW wc;
     memset(&wc, 0, sizeof(wc));
@@ -728,7 +774,7 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hprev, LPSTR cmdline, int show)
     if (sx < 0) sx = 0;
     if (sy < 0) sy = 0;
 
-    HWND hwnd = CreateWindowExW(0, CLASS_NAME, L"SnowRunner Time Jumper",
+    HWND hwnd = CreateWindowExW(0, CLASS_NAME, L(S_APP_TITLE),
                                 WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
                                 sx, sy, w, h, NULL, NULL, hinst, NULL);
     if (!hwnd) {
@@ -757,10 +803,14 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hprev, LPSTR cmdline, int show)
             while (opt[n] && n + 1 < sizeof(file) && opt[n] != '"') { file[n] = opt[n]; n++; }
             file[n] = 0;
             Sleep(1500);
-            if (save_window_image(hwnd, file))
-                srt_log("снимок окна сохранён: %s", file);
-            else
-                srt_log("не удалось сохранить снимок окна: %s", file);
+            {
+                WCHAR wfile[MAX_PATH];
+                gfx_widen(file, wfile, MAX_PATH);
+                if (save_window_image(hwnd, file))
+                    log_msg(S_LOG_SNAPSHOT_OK, wfile);
+                else
+                    log_msg(S_LOG_SNAPSHOT_FAIL, wfile);
+            }
             DestroyWindow(hwnd);
             if (icon) DestroyIcon(icon);
             ui_fonts_destroy(&g_state);

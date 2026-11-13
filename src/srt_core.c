@@ -17,6 +17,7 @@
 #include <string.h>
 #include <math.h>
 #include "srt_priv.h"
+#include "i18n.h"
 
 #define HOOK_LEN 9u
 #define VERIFY_DELAY_MS 350u
@@ -167,7 +168,7 @@ static BOOL patch_hook(SrtSession *s)
     if (s->info.orig_bytes[0] != 0xF3 || s->info.orig_bytes[1] != 0x41 ||
         s->info.orig_bytes[2] != 0x0F || s->info.orig_bytes[3] != 0x11 ||
         s->info.orig_bytes[4] != 0x95) {
-        srt_log("patch: на месте не MOVSS [r13+disp], xmm2 — перехват отменён");
+        log_msg(S_LOG_PATCH_BYTES);
         return FALSE;
     }
     uint32_t disp = (uint32_t)s->info.orig_bytes[5] |
@@ -175,7 +176,7 @@ static BOOL patch_hook(SrtSession *s)
                      ((uint32_t)s->info.orig_bytes[7] << 16) |
                      ((uint32_t)s->info.orig_bytes[8] << 24);
     if ((int32_t)disp != s->info.disp) {
-        srt_log("patch: смещение не совпало (найдено 0x%X, ожидалось 0x%X) — перехват отменён",
+        log_msg(S_LOG_PATCH_MISMATCH,
                 (unsigned)disp, (unsigned)s->info.disp);
         return FALSE;
     }
@@ -234,12 +235,12 @@ static BOOL verify_hook(SrtSession *s)
     if (natural < -0.01f || natural > 24.5f) {
         /* Значение не похоже на часы (0..24) — значит перехвачена не та
          * инструкция. Откатываем подмену. */
-        srt_log("verify: значение %f не похоже на время — перехват отменён",
+        log_msg(S_LOG_VERIFY_BAD,
                 (double)natural);
         return FALSE;
     }
 
-    srt_log("verify: clock_addr=%llX natural=%f",
+        log_msg(S_LOG_VERIFY,
             (unsigned long long)clock_addr, (double)natural);
     return TRUE;
 }
@@ -247,55 +248,50 @@ static BOOL verify_hook(SrtSession *s)
 /*  Публичные функции                                                   */
 /* ------------------------------------------------------------------ */
 
-SrtStatus srt_attach(SrtSession **out, char *err, size_t errsz)
+SrtStatus srt_attach(SrtSession **out, WCHAR *err, int err_chars)
 {
     if (out) *out = NULL;
-    if (err && errsz) err[0] = 0;
+    if (err && err_chars > 0) err[0] = 0;
 
     int count = 0;
     DWORD pid = srt_find_process(SRT_GAME_PROCESS, &count);
     if (pid == 0) {
-        if (err) snprintf(err, errsz,
-            "Процесс %s не найден.\n\nЗапустите игру и нажмите «Подключиться».",
-            SRT_GAME_PROCESS);
+        WCHAR wname[64];
+        MultiByteToWideChar(CP_UTF8, 0, SRT_GAME_PROCESS, -1, wname, 64);
+        if (err) lang_format(err, err_chars, S_ERR_NOT_FOUND, wname);
         return SRT_E_NOT_FOUND;
     }
     if (count > 1) {
-        srt_log("warning: найдено %d процессов %s, используем PID %lu",
+        srt_log("warning: %d processes %s found, using PID %lu",
                 count, SRT_GAME_PROCESS, (unsigned long)pid);
     }
 
     HANDLE proc = OpenProcess(SRTC_ACCESS, FALSE, pid);
     if (!proc) {
-        if (err) snprintf(err, errsz,
-            "Не удалось открыть процесс игры (код %lu).\n\n"
-            "Обычно это значит, что игра запущена с повышенными правами.\n"
-            "Запустите эту программу от имени администратора.",
-            (unsigned long)GetLastError());
+        if (err) lang_format(err, err_chars, S_ERR_OPEN, (unsigned long)GetLastError());
         return SRT_E_OPEN;
     }
 
     uintptr_t base = srt_module_base(pid, SRT_GAME_PROCESS);
     if (!base) {
         CloseHandle(proc);
-        if (err) snprintf(err, errsz, "Не удалось найти модуль игры в памяти.");
+        if (err) lang_format(err, err_chars, S_ERR_MODULE);
         return SRT_E_PATTERN;
     }
 
     SrtHookCandidate cands[16];
     int ncand = 0;
-    SrtStatus st = srt_find_hook(proc, base, cands, &ncand, err, errsz);
+    SrtStatus st = srt_find_hook(proc, base, cands, &ncand, err, err_chars);
     if (st != SRT_OK) {
         CloseHandle(proc);
         return st;
     }
-    srt_log("attach: pid=%lu base=%llX кандидатов=%d",
-            (unsigned long)pid, (unsigned long long)base, ncand);
+    log_msg(S_LOG_ATTACH_PID, (unsigned long)pid, (unsigned long long)base, ncand);
 
     SrtSession *s = (SrtSession *)calloc(1, sizeof(SrtSession));
     if (!s) {
         CloseHandle(proc);
-        if (err) snprintf(err, errsz, "Недостаточно памяти.");
+        if (err) lang_format(err, err_chars, S_ERR_ALLOC);
         return SRT_E_ALLOC;
     }
     s->proc = proc;
@@ -307,27 +303,26 @@ SrtStatus srt_attach(SrtSession **out, char *err, size_t errsz)
     int tries = ncand < 8 ? ncand : 8;
 
     for (int i = 0; i < tries; i++) {
-        srt_log("attach: кандидат %d/%d адрес=%llX смещение=0x%X%s",
-                i + 1, tries, (unsigned long long)cands[i].addr,
-                (unsigned)(unsigned int)cands[i].disp,
-                cands[i].exact ? " (точная сигнатура)" : " (свободный поиск)");
+        WCHAR dispbuf[16];
+        swprintf(dispbuf, 16, L"%X", (unsigned)(unsigned int)cands[i].disp);
+        log_msg(S_LOG_ATTACH_CAND, i + 1, tries,
+                (unsigned long long)cands[i].addr, dispbuf);
         s->info.hook_addr = cands[i].addr;
         s->info.disp      = cands[i].disp;
         s->info.code_addr = alloc_block(proc, base, cands[i].addr);
         if (!s->info.code_addr) {
-            if (err) snprintf(err, errsz,
-                "Не удалось выделить память в процессе игры.");
+            if (err) lang_format(err, err_chars, S_ERR_ALLOC);
             result = SRT_E_ALLOC;
             break;
         }
         s->info.data_addr = s->info.code_addr + SRT_CODE_BYTES;
-        srt_log("attach: блок кода=%llX блок данных=%llX",
+        log_msg(S_LOG_ATTACH_BLOCK,
                 (unsigned long long)s->info.code_addr,
                 (unsigned long long)s->info.data_addr);
 
         if (!write_stub(s, cands[i].disp)) {
             VirtualFreeEx(proc, (LPVOID)s->info.code_addr, 0, MEM_RELEASE);
-            if (err) snprintf(err, errsz, "Не удалось записать код в память игры.");
+            if (err) lang_format(err, err_chars, S_ERR_IO);
             result = SRT_E_IO;
             break;
         }
@@ -351,7 +346,7 @@ SrtStatus srt_attach(SrtSession **out, char *err, size_t errsz)
             VirtualProtectEx(proc, (LPVOID)s->info.data_addr, SRT_DATA_BYTES,
                              PAGE_READWRITE, &old);
             result = SRT_OK;
-            srt_log("attach: OK hook=%llX disp=0x%X code=%llX",
+            log_msg(S_LOG_ATTACH_OK,
                     (unsigned long long)s->info.hook_addr,
                     (unsigned)(unsigned int)cands[i].disp,
                     (unsigned long long)s->info.code_addr);
@@ -359,7 +354,7 @@ SrtStatus srt_attach(SrtSession **out, char *err, size_t errsz)
         }
 
         /* Не то место — откатываем и пробуем следующего кандидата. */
-        srt_log("attach: кандидат %d не подтверждён, пробуем следующий", i + 1);
+        log_msg(S_LOG_ATTACH_RETRY, i + 1);
         unpatch_hook(s);
         s->info.attached = FALSE;
         VirtualFreeEx(proc, (LPVOID)s->info.code_addr, 0, MEM_RELEASE);
@@ -369,8 +364,7 @@ SrtStatus srt_attach(SrtSession **out, char *err, size_t errsz)
 
     if (result != SRT_OK) {
         if (err && err[0] == 0)
-            snprintf(err, errsz,
-                "Не удалось подключиться: подходящее место в коде игры не найдено.");
+            lang_format(err, err_chars, S_ERR_GENERIC);
         CloseHandle(proc);
         free(s);
         return result;
@@ -391,7 +385,7 @@ void srt_detach(SrtSession *s)
         Sleep(200);                       /* дать игре выйти из стаба */
         if (s->info.code_addr)
             VirtualFreeEx(s->proc, (LPVOID)s->info.code_addr, 0, MEM_RELEASE);
-        srt_log("detach: PID %lu", (unsigned long)s->info.pid);
+        log_msg(S_LOG_DETACH, (unsigned long)s->info.pid);
     }
     if (s->proc) CloseHandle(s->proc);
     free(s);

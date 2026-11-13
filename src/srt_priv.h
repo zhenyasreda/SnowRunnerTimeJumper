@@ -31,7 +31,7 @@ typedef struct {
 
 SrtStatus srt_find_hook(HANDLE proc, uintptr_t base,
                          SrtHookCandidate *out_list, int *out_count,
-                         char *err, size_t errsz);
+                         WCHAR *err, int err_chars);
 
 /* Найти PID процесса по имени exe. out_count — сколько таких процессов. */
 DWORD srt_find_process(const char *name, int *out_count);

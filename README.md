@@ -9,6 +9,20 @@
 
 ![Интерфейс программы](docs/screenshot.png)
 
+## Язык интерфейса
+
+Программа определяет язык системы при запуске: если он русский — интерфейс
+на русском, любой другой — на английском. Язык можно переключить кнопкой в
+правом верхнем углу окна (Системный → Русский → English → Системный).
+
+Выбор сохраняется в файле `%LOCALAPPDATA%\SnowRunnerTimeJumper\settings.ini`
+(там же хранится тема оформления), поэтому язык можно задать и вручную:
+
+```ini
+lang=ru      ; или en, либо system
+theme=dark   ; или light, либо system
+```
+
 ## Быстрый старт
 
 1. Скачать `SnowRunnerTimeJumper.exe` из [релизов](https://github.com/zhenyasreda/SnowRunnerTimeJumper/releases) и запустить **после** SnowRunner.
@@ -61,6 +75,7 @@ F3 41 0F 11 95 <disp32>     movss dword ptr [r13+disp32], xmm2
 ```bash
 mingw32-make            # build/SnowRunnerTimeJumper.exe
 mingw32-make test       # автотест машинного кода стаба
+mingw32-make e2e        # сквозной тест с «имитацией игры»
 mingw32-make clean
 ```
 

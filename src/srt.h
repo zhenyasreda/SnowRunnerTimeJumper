@@ -97,8 +97,8 @@ typedef struct SrtSession SrtSession;
 /* ------------------------------------------------------------------ */
 
 /* Найти игру, внедрить стаб и включить перехват.
- * При ошибке в err записывается понятное сообщение (UTF-8). */
-SrtStatus srt_attach(SrtSession **out, char *err, size_t errsz);
+ * При ошибке в err записывается переведённое сообщение (err_chars — размер буфера). */
+SrtStatus srt_attach(SrtSession **out, WCHAR *err, int err_chars);
 
 /* Снять перехват: восстановить оригинальную инструкцию и освободить память. */
 void      srt_detach(SrtSession *s);

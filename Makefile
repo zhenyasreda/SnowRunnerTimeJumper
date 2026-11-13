@@ -33,9 +33,12 @@ TEST     := $(BUILD)/stub_test.exe
 
 SRCS     := $(wildcard src/*.c)
 OBJS     := $(patsubst src/%.c,$(OBJ)/%.o,$(SRCS))
-HDRS     := src/srt.h src/srt_priv.h src/ui.h src/ui_gfx.h src/hotkeys.h
 
-.PHONY: all test clean
+# Зависимости от заголовков отслеживаются автоматически (-MMD -MP):
+# изменение i18n.h пересобирает все файлы, которые его используют.
+DEPFLAGS := -MMD -MP
+
+.PHONY: all test e2e clean
 
 all: $(TARGET)
 
@@ -45,9 +48,11 @@ $(TARGET): $(OBJS)
 	@echo.
 	@echo Готово: $(TARGET)
 
-$(OBJ)/%.o: src/%.c $(HDRS)
+$(OBJ)/%.o: src/%.c
 	@$(MKDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+-include $(OBJS:.o=.d)
 
 # Манифест с DPI-осведомлённостью в сборке MinGW не нужен:
 # он включается программно (SetProcessDpiAwarenessContext),
@@ -67,8 +72,7 @@ $(BUILD)/fake_game.exe: tests/fake_game.c tests/fake_game.S
 	$(CC) $(CFLAGS) -o $@ tests/fake_game.c tests/fake_game.S -mconsole
 
 e2e: $(BUILD)/fake_game.exe $(TARGET)
-	copy /y $(BUILD)\fake_game.exe $(BUILD)\SnowRunner.exe >nul
-	@cmd /c "tests\\e2e_test.bat"
+	powershell -NoProfile -ExecutionPolicy Bypass -File tests\\e2e_test.ps1
 
 clean:
 	@$(CLEAN)

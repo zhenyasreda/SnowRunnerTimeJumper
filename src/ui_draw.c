@@ -17,6 +17,7 @@ typedef struct {
     int mode_x, mode_y, mode_w, mode_h;
     int chip_x, chip_y, chip_w, chip_h;
     int theme_x, theme_y, theme_w, theme_h;
+    int lang_x, lang_y, lang_w, lang_h;
     int sect_y, row_y[3], row_h, row_gap;
     int list_y, list_row_h, key_w, col_w;
     int status_y, status_w;
@@ -55,6 +56,10 @@ static void metrics(const UiState *st, int width, int height, UiMetrics *m)
     m->theme_h  = px(st, 26);
     m->theme_x  = width - m->pad - m->theme_w;
     m->theme_y  = px(st, 12);
+    m->lang_w   = px(st, 104);
+    m->lang_h   = px(st, 26);
+    m->lang_x   = m->theme_x - px(st, 8) - m->lang_w;
+    m->lang_y   = px(st, 12);
     m->sect_y   = px(st, 194);
     m->row_h    = px(st, 38);
     m->row_gap  = px(st, 8);
@@ -127,13 +132,15 @@ void ui_layout(UiState *st, int width, int height)
     st->rect_status.right = m.x + m.w;
     st->rect_status.bottom = m.status_y + px(st, 34);
 
-    /* переключатель темы в шапке */
+    /* переключатели темы и языка в шапке */
     add_button(st, m.theme_x, m.theme_y, m.theme_w, m.theme_h,
-               UI_ACT_THEME, 0.0f, ui_theme_name(), UI_BTN_NORMAL);
+               UI_ACT_THEME, 0.0f, L(ui_theme_label()), UI_BTN_NORMAL);
+    add_button(st, m.lang_x, m.lang_y, m.lang_w, m.lang_h,
+               UI_ACT_LANG, 0.0f, L(lang_label()), UI_BTN_NORMAL);
 
     if (!st->session && !st->demo) {
         add_button(st, m.x, m.row_y[0], m.w, m.row_h,
-                   UI_ACT_ATTACH, 0.0f, L"Подключиться к игре", UI_BTN_ACCENT);
+                   UI_ACT_ATTACH, 0.0f, L(S_BTN_CONNECT), UI_BTN_ACCENT);
         return;
     }
 
@@ -141,9 +148,9 @@ void ui_layout(UiState *st, int width, int height)
     int gap = px(st, 10);
     int bw = (m.w - 2 * gap) / 3;
     int x = m.x;
-    add_button(st, x, m.row_y[0], bw, m.row_h, UI_ACT_STOP,  0.0f, L"Остановить", UI_BTN_NORMAL); x += bw + gap;
-    add_button(st, x, m.row_y[0], bw, m.row_h, UI_ACT_START, 0.0f, L"Запустить",  UI_BTN_NORMAL); x += bw + gap;
-    add_button(st, x, m.row_y[0], bw, m.row_h, UI_ACT_SYNC,  0.0f, L"По часам",   UI_BTN_NORMAL);
+    add_button(st, x, m.row_y[0], bw, m.row_h, UI_ACT_STOP,  0.0f, L(S_BTN_STOP), UI_BTN_NORMAL); x += bw + gap;
+    add_button(st, x, m.row_y[0], bw, m.row_h, UI_ACT_START, 0.0f, L(S_BTN_START), UI_BTN_NORMAL); x += bw + gap;
+    add_button(st, x, m.row_y[0], bw, m.row_h, UI_ACT_SYNC,  0.0f, L(S_BTN_SYNC), UI_BTN_NORMAL);
 
     /* ряд 2: скорости (обычная, x2, x3, x4, /2, /3, /4) */
     gap = px(st, 8);
@@ -159,15 +166,15 @@ void ui_layout(UiState *st, int width, int height)
 
     /* ряд 3: сдвиг часов и точное время */
     add_row3(st, &m,
-             L"−1 ч", UI_ACT_SHIFT, -1.0f,
-             L"+1 ч", UI_ACT_SHIFT,  1.0f,
-             L"−2 ч", UI_ACT_SHIFT, -2.0f,
-             L"+2 ч", UI_ACT_SHIFT,  2.0f,
-             L"Точное время ▾", UI_ACT_PRESET_MENU);
+             L(S_SHIFT_M1), UI_ACT_SHIFT, -1.0f,
+             L(S_SHIFT_P1), UI_ACT_SHIFT,  1.0f,
+             L(S_SHIFT_M2), UI_ACT_SHIFT, -2.0f,
+             L(S_SHIFT_P2), UI_ACT_SHIFT,  2.0f,
+             L(S_BTN_EXACT), UI_ACT_PRESET_MENU);
 
     /* отключение */
     add_button(st, m.x + m.w - px(st, 100), m.status_y - px(st, 3), px(st, 100), px(st, 24),
-               UI_ACT_DETACH, 0.0f, L"Отключиться", UI_BTN_NORMAL);
+               UI_ACT_DETACH, 0.0f, L(S_BTN_DISCONNECT), UI_BTN_NORMAL);
 }
 
 /* --------------------------- отрисовка --------------------------- */
@@ -201,14 +208,14 @@ static void mode_info(const UiState *st, WCHAR *chip, int chip_n,
     (void)desc_n;
 
     if (!st->session) {
-        wcscpy(chip, L"Нет игры");
-        wcscpy(desc, L"Запустите SnowRunner и нажмите «Подключиться»");
+        wcscpy(chip, L(S_CHIP_NO_GAME));
+        wcscpy(desc, L(S_DESC_NO_GAME));
         *chip_color = p->dim;
         return;
     }
     if (st->rate_kind == 2) {
-        wcscpy(chip, L"По часам");
-        wcscpy(desc, L"Время синхронизировано с часами компьютера");
+        wcscpy(chip, L(S_CHIP_SYNC));
+        wcscpy(desc, L(S_DESC_SYNC));
         *chip_color = p->warn;
         return;
     }
@@ -217,18 +224,18 @@ static void mode_info(const UiState *st, WCHAR *chip, int chip_n,
         if (factor > 1.02)      swprintf(chip, (size_t)chip_n, L"×%d", (int)(factor + 0.5));
         else if (factor < 0.98) swprintf(chip, (size_t)chip_n, L"÷%d", (int)(1.0 / factor + 0.5));
         else                    wcscpy(chip, L"×1");
-        wcscpy(desc, L"Скорость изменения времени");
+        wcscpy(desc, L(S_DESC_SPEED));
         *chip_color = p->accent;
         return;
     }
     if (st->mode == SRT_MODE_NATURAL) {
-        wcscpy(chip, L"Обычное");
-        wcscpy(desc, L"Время идёт с обычной скоростью игры");
+        wcscpy(chip, L(S_CHIP_NORMAL));
+        wcscpy(desc, L(S_DESC_NORMAL));
         *chip_color = p->ok;
         return;
     }
-    wcscpy(chip, L"Стоп");
-    wcscpy(desc, L"Время остановлено");
+    wcscpy(chip, L(S_CHIP_STOP));
+    wcscpy(desc, L(S_DESC_STOP));
     *chip_color = p->danger;
 }
 
@@ -286,11 +293,11 @@ void ui_paint(UiState *st, HDC hdc, int width, int height)
     DeleteObject(bg);
 
     /* заголовок */
-    gfx_text(target, L"SnowRunner Time Jumper",
-             m.x, m.title_y, m.w - m.theme_w - px(st, 12), px(st, 26),
+    gfx_text(target, L(S_HEADER),
+             m.x, m.title_y, m.w - m.lang_w - m.theme_w - px(st, 20), px(st, 26),
              st->f_title, p->text, GFX_ALIGN_NEAR, GFX_LINE_CENTER);
 
-    WCHAR sub[160];
+    WCHAR sub[192];
     if (st->session) {
         const SrtInfo *info = srt_info(st->session);
         WCHAR proc[64];
@@ -310,14 +317,15 @@ void ui_paint(UiState *st, HDC hdc, int width, int height)
         WCHAR pid[24];
         gfx_widen(digits, pid, 24);
 
-        wcscpy(sub, proc);
-        wcscat(sub, L" · PID ");
-        wcscat(sub, pid);
-        wcscat(sub, L" · память игры изменена");
+        _snwprintf(sub, (int)(sizeof(sub) / sizeof(sub[0])) - 1,
+                    L(S_MEMORY_CHANGED), proc, pid);
+        sub[(int)(sizeof(sub) / sizeof(sub[0])) - 1] = 0;
     } else {
-        wcscpy(sub, L"Соединение с игрой не установлено");
+        wcscpy(sub, L(S_CONNECTED_NO));
     }
-    gfx_text(target, sub, m.x, m.sub_y, m.w - m.theme_w - px(st, 12), px(st, 18),
+    /* Подзаголовок — во всю ширину: кнопки темы и языка находятся выше,
+     * на строке заголовка, и текст с ними не пересекается. */
+    gfx_text(target, sub, m.x, m.sub_y, m.w, px(st, 18),
              st->f_sub, p->faint, GFX_ALIGN_NEAR, GFX_LINE_CENTER);
 
     /* карточка с часами */
@@ -345,7 +353,7 @@ void ui_paint(UiState *st, HDC hdc, int width, int height)
              st->f_sub, p->dim, GFX_ALIGN_NEAR, GFX_LINE_CENTER);
 
     /* заголовки разделов */
-    gfx_text(target, L"УПРАВЛЕНИЕ ВРЕМЕНЕМ", m.x, m.sect_y, m.w, px(st, 18),
+    gfx_text(target, L(S_SECTION_TIME), m.x, m.sect_y, m.w, px(st, 18),
              st->f_sect, p->dim, GFX_ALIGN_NEAR, GFX_LINE_CENTER);
 
     /* кнопки */
@@ -355,7 +363,7 @@ void ui_paint(UiState *st, HDC hdc, int width, int height)
     }
 
     /* горячие клавиши */
-    gfx_text(target, L"ГОРЯЧИЕ КЛАВИШИ", m.x, m.sect_y + px(st, 174), m.w, px(st, 18),
+    gfx_text(target, L(S_SECTION_KEYS), m.x, m.sect_y + px(st, 174), m.w, px(st, 18),
              st->f_sect, p->dim, GFX_ALIGN_NEAR, GFX_LINE_CENTER);
 
     int rows_per_col = 12;
@@ -367,9 +375,9 @@ void ui_paint(UiState *st, HDC hdc, int width, int height)
         int cx = m.x + col * (m.col_w + px(st, 12));
         int cy = m.list_y + row * m.list_row_h;
 
-        WCHAR key[64], desc[96];
+        WCHAR key[64];
         gfx_widen(hk->keys, key, 64);
-        gfx_widen(hk->desc, desc, 96);
+        const WCHAR *desc = L(hk->desc);
         gfx_text(target, key, cx, cy, m.key_w, m.list_row_h,
                  st->f_key, p->accent, GFX_ALIGN_NEAR, GFX_LINE_CENTER);
         gfx_text(target, desc, cx + m.key_w + px(st, 6), cy,

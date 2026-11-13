@@ -19,7 +19,8 @@ typedef enum {
     UI_ACT_PRESET_MENU, /* меню точного времени      */
     UI_ACT_ATTACH,
     UI_ACT_DETACH,
-    UI_ACT_THEME        /* переключить тему оформления */
+    UI_ACT_THEME,       /* переключить тему оформления */
+    UI_ACT_LANG        /* переключить язык интерфейса */
 } UiAction;
 
 typedef enum {

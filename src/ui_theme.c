@@ -7,7 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "ui_theme.h"
-#include "srt.h"
+#include "i18n.h"
+#include "settings.h"
 
 static const UiPalette PAL_DARK = {
     RGB(22, 24, 31),        /* bg         */
@@ -82,58 +83,29 @@ const UiPalette *ui_theme_palette(void)
     return dark ? &PAL_DARK : &PAL_LIGHT;
 }
 
-const WCHAR *ui_theme_name(void)
+StrId ui_theme_label(void)
 {
     switch (g_mode) {
-    case UI_THEME_LIGHT: return L"Светлая";
-    case UI_THEME_DARK:  return L"Тёмная";
-    default:            return L"Системная";
+    case UI_THEME_LIGHT: return S_THEME_LIGHT;
+    case UI_THEME_DARK:  return S_THEME_DARK;
+    default:            return S_THEME_SYSTEM;
     }
-}
-
-/* Путь к файлу настроек. */
-static void settings_path(wchar_t *buf, size_t chars)
-{
-    wchar_t local[MAX_PATH];
-    DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
-    if (n == 0 || n > MAX_PATH) wcscpy(local, L".");
-    _snwprintf(buf, chars, L"%s\\SnowRunnerTimeJumper", local);
-    CreateDirectoryW(buf, NULL);
-    _snwprintf(buf, chars, L"%s\\SnowRunnerTimeJumper\\settings.ini", local);
 }
 
 void ui_theme_load(void)
 {
-    wchar_t path[MAX_PATH];
-    settings_path(path, MAX_PATH);
-
-    FILE *f = NULL;
-    if (_wfopen_s(&f, path, L"r") != 0 || !f) return;
-
-    char line[256];
-    while (fgets(line, sizeof(line), f)) {
-        if (strncmp(line, "theme=", 6) != 0) continue;
-        const char *v = line + 6;
-        if (strncmp(v, "light", 5) == 0)      g_mode = UI_THEME_LIGHT;
-        else if (strncmp(v, "dark", 4) == 0) g_mode = UI_THEME_DARK;
-        else                                 g_mode = UI_THEME_SYSTEM;
-        break;
-    }
-    fclose(f);
+    char value[64] = { 0 };
+    if (!settings_get("theme", value, sizeof(value))) return;
+    if (strcmp(value, "light") == 0)     g_mode = UI_THEME_LIGHT;
+    else if (strcmp(value, "dark") == 0) g_mode = UI_THEME_DARK;
+    else                                 g_mode = UI_THEME_SYSTEM;
     g_system_dark = ui_theme_system_is_dark();
 }
 
 void ui_theme_save(void)
 {
-    wchar_t path[MAX_PATH];
-    settings_path(path, MAX_PATH);
-
-    FILE *f = NULL;
-    if (_wfopen_s(&f, path, L"w") != 0 || !f) return;
-
     const char *v = "system";
     if (g_mode == UI_THEME_LIGHT) v = "light";
     else if (g_mode == UI_THEME_DARK) v = "dark";
-    fprintf(f, "theme=%s\n", v);
-    fclose(f);
+    settings_set("theme", v);
 }
