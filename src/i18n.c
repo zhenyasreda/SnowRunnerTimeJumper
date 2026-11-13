@@ -46,9 +46,8 @@ static const WCHAR *const TEXTS[2][S_COUNT] = {
     [S_THEME_SYSTEM]       = L"Системная",
     [S_THEME_LIGHT]        = L"Светлая",
     [S_THEME_DARK]         = L"Тёмная",
-    [S_LANG_SYSTEM]        = L"Системный",
-    [S_LANG_RU]            = L"Русский",
-    [S_LANG_EN]            = L"English",
+    [S_LANG_RU]            = L"РУС",
+    [S_LANG_EN]            = L"ENG",
 
     [S_ST_CONNECTED]       = L"Подключено. Управление временем доступно.",
     [S_ST_DISCONNECTED]    = L"Отключено от игры, память игры восстановлена.",
@@ -160,9 +159,10 @@ static const WCHAR *const TEXTS[2][S_COUNT] = {
     [S_THEME_SYSTEM]       = L"System",
     [S_THEME_LIGHT]        = L"Light",
     [S_THEME_DARK]         = L"Dark",
-    [S_LANG_SYSTEM]        = L"System",
-    [S_LANG_RU]            = L"Russian",
-    [S_LANG_EN]            = L"English",
+    /* Подписи кнопок одинаковы в обоих языках: чтобы их можно было
+     * найти, не переключая язык. */
+    [S_LANG_RU]            = L"РУС",
+    [S_LANG_EN]            = L"ENG",
 
     [S_ST_CONNECTED]       = L"Connected. Time control is available.",
     [S_ST_DISCONNECTED]    = L"Disconnected, game memory restored.",
@@ -243,7 +243,11 @@ static const WCHAR *const TEXTS[2][S_COUNT] = {
 }
 };
 
-static LangMode g_mode = LANG_SYSTEM;
+static LangMode g_mode = LANG_RU;
+
+/* Язык выбран пользователем вручную? Если нет — программа следует
+ * за языком системы (например, при смене языка Windows). */
+static BOOL g_explicit = FALSE;
 
 /* ------------------------------------------------------------------ */
 
@@ -266,16 +270,13 @@ BOOL lang_system_is_russian(void)
 
 int lang_index(void)
 {
-    switch (g_mode) {
-    case LANG_RU: return 0;
-    case LANG_EN: return 1;
-    default:      return lang_system_is_russian() ? 0 : 1;
-    }
+    return (g_mode == LANG_RU) ? 0 : 1;
 }
 
 void lang_set_mode(LangMode mode)
 {
     g_mode = mode;
+    g_explicit = TRUE;
 }
 
 LangMode lang_mode(void)
@@ -283,19 +284,21 @@ LangMode lang_mode(void)
     return g_mode;
 }
 
+BOOL lang_is_explicit(void)
+{
+    return g_explicit;
+}
+
+void lang_follow_system(void)
+{
+    g_mode = lang_system_is_russian() ? LANG_RU : LANG_EN;
+    g_explicit = FALSE;
+}
+
 const WCHAR *L(StrId id)
 {
     if ((int)id < 0 || id >= S_COUNT) return L"";
     return TEXTS[lang_index()][id];
-}
-
-StrId lang_label(void)
-{
-    switch (g_mode) {
-    case LANG_RU: return S_LANG_RU;
-    case LANG_EN: return S_LANG_EN;
-    default:      return S_LANG_SYSTEM;
-    }
 }
 
 void lang_format(WCHAR *buf, int chars, StrId id, ...)
@@ -314,22 +317,30 @@ void lang_format(WCHAR *buf, int chars, StrId id, ...)
 void lang_load(void)
 {
     char value[64] = { 0 };
-    if (!settings_get("lang", value, sizeof(value))) {
-        srt_log("i18n: no 'lang' key, using the system language");
-        return;
+
+    /* Язык, выбранный пользователем, важнее языка системы. */
+    if (settings_get("lang", value, sizeof(value))) {
+        if (strcmp(value, "ru") == 0) {
+            g_mode = LANG_RU; g_explicit = TRUE;
+            srt_log("i18n: lang from settings = ru");
+            return;
+        }
+        if (strcmp(value, "en") == 0) {
+            g_mode = LANG_EN; g_explicit = TRUE;
+            srt_log("i18n: lang from settings = en");
+            return;
+        }
     }
-    if (strcmp(value, "ru") == 0)      g_mode = LANG_RU;
-    else if (strcmp(value, "en") == 0) g_mode = LANG_EN;
-    else                               g_mode = LANG_SYSTEM;
-    srt_log("i18n: lang from settings = %s, index = %d", value, lang_index());
+
+    /* Выбора нет — берём язык системы. */
+    lang_follow_system();
+    srt_log("i18n: no lang in settings, system language = %s",
+            g_mode == LANG_RU ? "ru" : "en");
 }
 
 void lang_save(void)
 {
-    const char *v = "system";
-    if (g_mode == LANG_RU) v = "ru";
-    else if (g_mode == LANG_EN) v = "en";
-    settings_set("lang", v);
+    settings_set("lang", g_mode == LANG_RU ? "ru" : "en");
 }
 
 void log_msg(StrId id, ...)

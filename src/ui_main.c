@@ -274,12 +274,11 @@ static void action_theme(UiState *st)
     set_status(st, S_ST_THEME_CHANGED);
 }
 
-static void action_lang(UiState *st)
+/* Выбор языка интерфейса кнопками «РУС» и «ENG». */
+static void set_lang(UiState *st, LangMode mode)
 {
-    LangMode m = lang_mode();
-    m = (m == LANG_SYSTEM) ? LANG_RU :
-        (m == LANG_RU)      ? LANG_EN : LANG_SYSTEM;
-    lang_set_mode(m);
+    if (lang_mode() == mode && lang_is_explicit()) return;
+    lang_set_mode(mode);
     lang_save();
     layout_now(st);
     InvalidateRect(st->hwnd, NULL, FALSE);
@@ -301,7 +300,8 @@ static void perform(UiState *st, UiAction action, float value)
     case UI_ACT_ATTACH: action_attach(st); break;
     case UI_ACT_DETACH: action_detach(st); break;
     case UI_ACT_THEME:  action_theme(st); break;
-    case UI_ACT_LANG:   action_lang(st); break;
+    case UI_ACT_LANG_RU: set_lang(st, LANG_RU); break;
+    case UI_ACT_LANG_EN: set_lang(st, LANG_EN); break;
     case UI_ACT_PRESET_MENU: break;   /* обрабатывается отдельно */
     }
     layout_now(st);
@@ -625,8 +625,10 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             ui_theme_set(UI_THEME_SYSTEM);
             InvalidateRect(hwnd, NULL, FALSE);
         }
-        if (lang_mode() == LANG_SYSTEM) {
-            lang_set_mode(LANG_SYSTEM);
+        /* Язык системы учитывается, только пока пользователь не выбрал
+         * язык вручную кнопкой «РУС»/«ENG». */
+        if (!lang_is_explicit()) {
+            lang_follow_system();
             layout_now(st);
             InvalidateRect(hwnd, NULL, FALSE);
         }
@@ -751,7 +753,6 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hprev, LPSTR cmdline, int show)
     /* тема оформления и язык интерфейса: по умолчанию — как в системе */
     ui_theme_set(UI_THEME_SYSTEM);
     ui_theme_load();
-    lang_set_mode(LANG_SYSTEM);
     lang_load();
 
     WNDCLASSEXW wc;

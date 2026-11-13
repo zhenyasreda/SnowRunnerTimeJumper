@@ -20,7 +20,8 @@ typedef enum {
     UI_ACT_ATTACH,
     UI_ACT_DETACH,
     UI_ACT_THEME,       /* переключить тему оформления */
-    UI_ACT_LANG        /* переключить язык интерфейса */
+    UI_ACT_LANG_RU,     /* выбрать русский язык      */
+    UI_ACT_LANG_EN      /* выбрать английский язык   */
 } UiAction;
 
 typedef enum {

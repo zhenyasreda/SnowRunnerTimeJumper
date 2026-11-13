@@ -2,18 +2,18 @@
  * i18n.h — локализация интерфейса.
  *
  * Программа стартует на языке системы: если он русский — на русском,
- * иначе на английском. Язык можно переключить в окне программы.
+ * иначе на английском. В окне есть две кнопки — «РУС» и «ENG».
  */
+
 #ifndef I18N_H_INCLUDED
 #define I18N_H_INCLUDED
 
 #include <windows.h>
 
-/* Режим языка интерфейса. */
+/* Язык интерфейса. Поддерживаются ровно два. */
 typedef enum {
-    LANG_SYSTEM = 0,   /* как в системе            */
-    LANG_RU,           /* русский                  */
-    LANG_EN            /* английский               */
+    LANG_RU = 0,        /* русский    */
+    LANG_EN             /* английский */
 } LangMode;
 
 /* Идентификаторы строк. Порядок должен совпадать с таблицей в i18n.c. */
@@ -53,9 +53,8 @@ typedef enum {
     S_THEME_SYSTEM,
     S_THEME_LIGHT,
     S_THEME_DARK,
-    S_LANG_SYSTEM,
-    S_LANG_RU,
-    S_LANG_EN,
+    S_LANG_RU,          /* подпись кнопки «РУС»  */
+    S_LANG_EN,          /* подпись кнопки «ENG»  */
 
     /* --- сообщения в строке состояния --- */
     S_ST_CONNECTED,
@@ -141,12 +140,12 @@ typedef enum {
     S_COUNT
 } StrId;
 
-/* Текущий режим языка. */
-void   lang_set_mode(LangMode mode);
+/* Текущий язык интерфейса. */
+void     lang_set_mode(LangMode mode);
 LangMode lang_mode(void);
 
 /* Индекс выбранного языка: 0 — русский, 1 — английский. */
-int    lang_index(void);
+int      lang_index(void);
 
 /* Перевод строки по идентификатору. */
 const WCHAR *L(StrId id);
@@ -154,15 +153,18 @@ const WCHAR *L(StrId id);
 /* Отформатировать переведённую строку в буфер (всегда с завершающим нулём). */
 void lang_format(WCHAR *buf, int chars, StrId id, ...);
 
-/* Название текущего режима языка для интерфейса (переводится). */
-StrId lang_label(void);
-
 /* Русский ли язык системы по умолчанию? */
 BOOL   lang_system_is_russian(void);
+
+/* Выбран ли язык вручную? Если нет — программа следует за языком системы. */
+BOOL   lang_is_explicit(void);
 
 /* Загрузить/сохранить язык из файла настроек. */
 void   lang_load(void);
 void   lang_save(void);
+
+/* Вернуться к языку системы (сброс ручного выбора). */
+void   lang_follow_system(void);
 
 /* Запись переведённой строки в журнал. */
 void   log_msg(StrId id, ...);

@@ -6,6 +6,7 @@
 #include <math.h>
 #include "ui.h"
 #include "ui_theme.h"
+#include "i18n.h"
 
 /* ----------------------------- геометрия ---------------------------- */
 
@@ -17,7 +18,7 @@ typedef struct {
     int mode_x, mode_y, mode_w, mode_h;
     int chip_x, chip_y, chip_w, chip_h;
     int theme_x, theme_y, theme_w, theme_h;
-    int lang_x, lang_y, lang_w, lang_h;
+    int lang_ru_x, lang_en_x, lang_y, lang_w, lang_h;
     int sect_y, row_y[3], row_h, row_gap;
     int list_y, list_row_h, key_w, col_w;
     int status_y, status_w;
@@ -56,10 +57,11 @@ static void metrics(const UiState *st, int width, int height, UiMetrics *m)
     m->theme_h  = px(st, 26);
     m->theme_x  = width - m->pad - m->theme_w;
     m->theme_y  = px(st, 12);
-    m->lang_w   = px(st, 104);
+    m->lang_w   = px(st, 52);
     m->lang_h   = px(st, 26);
-    m->lang_x   = m->theme_x - px(st, 8) - m->lang_w;
     m->lang_y   = px(st, 12);
+    m->lang_en_x = m->theme_x - px(st, 8) - m->lang_w;      /* ENG — правее */
+    m->lang_ru_x = m->lang_en_x - px(st, 6) - m->lang_w;    /* РУС  — левее  */
     m->sect_y   = px(st, 194);
     m->row_h    = px(st, 38);
     m->row_gap  = px(st, 8);
@@ -132,11 +134,15 @@ void ui_layout(UiState *st, int width, int height)
     st->rect_status.right = m.x + m.w;
     st->rect_status.bottom = m.status_y + px(st, 34);
 
-    /* переключатели темы и языка в шапке */
+    /* переключатель темы и две кнопки выбора языка в шапке */
     add_button(st, m.theme_x, m.theme_y, m.theme_w, m.theme_h,
                UI_ACT_THEME, 0.0f, L(ui_theme_label()), UI_BTN_NORMAL);
-    add_button(st, m.lang_x, m.lang_y, m.lang_w, m.lang_h,
-               UI_ACT_LANG, 0.0f, L(lang_label()), UI_BTN_NORMAL);
+    add_button(st, m.lang_ru_x, m.lang_y, m.lang_w, m.lang_h,
+               UI_ACT_LANG_RU, 0.0f, L(S_LANG_RU),
+               lang_mode() == LANG_RU ? UI_BTN_ACCENT : UI_BTN_NORMAL);
+    add_button(st, m.lang_en_x, m.lang_y, m.lang_w, m.lang_h,
+               UI_ACT_LANG_EN, 0.0f, L(S_LANG_EN),
+               lang_mode() == LANG_EN ? UI_BTN_ACCENT : UI_BTN_NORMAL);
 
     if (!st->session && !st->demo) {
         add_button(st, m.x, m.row_y[0], m.w, m.row_h,
@@ -294,7 +300,7 @@ void ui_paint(UiState *st, HDC hdc, int width, int height)
 
     /* заголовок */
     gfx_text(target, L(S_HEADER),
-             m.x, m.title_y, m.w - m.lang_w - m.theme_w - px(st, 20), px(st, 26),
+             m.x, m.title_y, m.w - 2 * m.lang_w - m.theme_w - px(st, 26), px(st, 26),
              st->f_title, p->text, GFX_ALIGN_NEAR, GFX_LINE_CENTER);
 
     WCHAR sub[192];
